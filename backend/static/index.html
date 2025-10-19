@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EcoPoint Admin (Demo)</title>
+    <script></script>
+    <style>
+      body {
+        font-family: system-ui;
+        margin: 20px;
+      }
+      pre {
+        background: #f6f8fa;
+        padding: 12px;
+      }
+    </style>
+    <p>
+      Auto-refresh has been disabled to comply with refresh policy; open the API
+      in a new tab or use the button below to refresh manually:
+    </p>
+    <p>
+      <button id="refreshBtn" onclick="location.reload()">Refresh now</button>
+    </p>
+  </head>
+  <body>
+    <h1>EcoPoint Admin (Demo)</h1>
+    <p>Auto-refreshing every 2s. Open the API in a new tab:</p>
+    <p>
+      <a
+        href="http://127.0.0.1:8000/api/transactions"
+        target="_blank"
+        rel="noopener"
+        >Transactions API</a
+      >
+    </p>
+    <p>
+      <a
+        href="http://127.0.0.1:8000/api/points/demo_user"
+        target="_blank"
+        rel="noopener"
+        >Points (demo_user)</a
+      >
+    </p>
+    <p>
+      Tip: show this page side-by-side with the camera window during the pitch.
+    </p>
+  </body>
+</html>
