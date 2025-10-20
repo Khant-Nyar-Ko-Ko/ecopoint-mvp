@@ -8,7 +8,6 @@ from ultralytics import YOLO
 
 
 def load_env_file(path: Path) -> None:
-    """Populate os.environ with key=value pairs from a simple .env file."""
     if not path.exists():
         return
     for raw_line in path.read_text().splitlines():
@@ -37,6 +36,7 @@ if not cap.isOpened():
     raise RuntimeError("Camera not available. Try a different CAM_INDEX (1 or 2).")
 
 print("Starting bottle detection... Press 'q' to quit.")
+bottle_present = False
 last_detect = 0.0
 
 while True:
@@ -52,22 +52,27 @@ while True:
     labels = [model.names[int(c)] for c in results[0].boxes.cls] if results[0].boxes.cls is not None else []
     now = time.time()
 
-    # If a 'bottle' appears, send API call (rate-limited)
-    if "bottle" in [l.lower() for l in labels] and (now - last_detect >= DETECTION_COOLDOWN):
-        bottle_type = MATERIAL_MAP.get("bottle", "plastic")
-        payload = {
-            "user_id": USER_ID,
-            "bottle_type": bottle_type,
-            "quantity": 1,
-            "machine_id": MACHINE_ID,
-        }
-        print("🥤 Bottle detected! Sending:", payload)
-        try:
-            r = requests.post(API_URL, json=payload, timeout=3)
-            print("✅ API:", r.status_code, r.json())
-        except Exception as e:
-            print("⚠️ API error:", e)
-        last_detect = now
+    # If a 'bottle' appears, trigger a deposit only when it first enters the frame
+    detected = "bottle" in [l.lower() for l in labels]
+    if detected:
+        if (not bottle_present) and (now - last_detect >= DETECTION_COOLDOWN):
+            bottle_type = MATERIAL_MAP.get("bottle", "plastic")
+            payload = {
+                "user_id": USER_ID,
+                "bottle_type": bottle_type,
+                "quantity": 1,
+                "machine_id": MACHINE_ID,
+            }
+            print("Bottle detected! Sending:", payload)
+            try:
+                r = requests.post(API_URL, json=payload, timeout=3)
+                print("API:", r.status_code, r.json())
+            except Exception as e:
+                print("API error:", e)
+            last_detect = now
+        bottle_present = True
+    else:
+        bottle_present = False
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
