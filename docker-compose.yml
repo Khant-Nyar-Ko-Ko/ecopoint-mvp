@@ -1,0 +1,37 @@
+name: eco-point
+
+services:
+  db:
+    image: postgres:17.6-alpine 
+    container_name: postgres-db
+    environment:
+      - POSTGRES_DB=ecopoint
+    env_file:
+      - .env.postgress
+    ports:
+      - 5434:5432
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    networks:
+      - postnet
+
+  # backend:
+  #   build:
+  #     context: ./service
+  #     dockerfile: Dockerfile
+  #   container_name: eco-point
+  #   environment:
+  #     - SPRING_PROFILES_ACTIVE=docker
+  #   env_file:
+  #     - .env.postgress
+  #   ports:
+  #     - 8080:8080
+  #   networks:
+  #     - postnet
+
+
+volumes:
+  dbdata:
+
+networks:
+  postnet:
