@@ -1,5 +1,7 @@
 package com.ecopoint.app.model.entity;
 
+import java.time.LocalDateTime;
+
 import com.ecopoint.app.model.RedeemStatus;
 
 import jakarta.persistence.Column;
@@ -26,6 +28,9 @@ public class Redemption {
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
 	private RedeemStatus status;
+	
+	@Column(nullable = false)
+	private LocalDateTime createAt;
 	
 	@ManyToOne(optional = false)
 	private Account user;

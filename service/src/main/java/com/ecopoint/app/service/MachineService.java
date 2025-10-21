@@ -74,6 +74,7 @@ public class MachineService {
 		txn.setQuantity(quantity);
 		txn.setPointsAdded(add);
 		txn.setMachineId(form.machine_id());
+		txn.setCreateAt(LocalDateTime.now());
 		txn.setIdemKey(idemKey);
 		txnRepo.save(txn);
 		

@@ -22,7 +22,6 @@ public class MachineApi {
 	private MachineService service;
 	
 	
-	
 	@PostMapping()
 	public ResponseEntity<DepositResult> depositRequest(
 			@RequestHeader(value = "Idempotency-Key", required = false) String idemKey,

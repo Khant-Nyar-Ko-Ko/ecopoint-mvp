@@ -36,6 +36,7 @@ public class SessionApi {
 	    s.setMachineCode(req.machine_code());
 	    s.setExpiresAt(LocalDateTime.now().plusMinutes(5));
 	    s.setStatus(MachineSession.Status.ACTIVE);
+	    s.setCreatedAt(LocalDateTime.now());
 	    
 	    sessionRepo.save(s);
 	    
