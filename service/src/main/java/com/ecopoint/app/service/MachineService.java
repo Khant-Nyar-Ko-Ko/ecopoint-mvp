@@ -10,11 +10,14 @@ import com.ecopoint.app.controller.input.DepositRequestForm;
 import com.ecopoint.app.controller.output.DepositResult;
 import com.ecopoint.app.exception.BusinessException;
 import com.ecopoint.app.model.BottleType;
+import com.ecopoint.app.model.LedgerType;
 import com.ecopoint.app.model.entity.DepositTxn;
 import com.ecopoint.app.model.entity.MachineSession;
+import com.ecopoint.app.model.entity.PointLedger;
 import com.ecopoint.app.model.repo.AccountRepo;
 import com.ecopoint.app.model.repo.DepositTxnzRepo;
 import com.ecopoint.app.model.repo.MachineSessionRepo;
+import com.ecopoint.app.model.repo.PointLedgerRepo;
 import com.ecopoint.app.model.repo.PointsWalletRepo;
 
 @Service
@@ -28,12 +31,19 @@ public class MachineService {
 	private DepositTxnzRepo txnRepo;
 	@Autowired
 	private MachineSessionRepo sessionRepo;
+	@Autowired
+	private PointLedgerRepo ledgerRepo;
 	
 	private static final int POINTS_PER_BOTTLE = 10;
 	
 	
 	@Transactional
 	public DepositResult request(DepositRequestForm form, String idemKey) {
+		
+		if(txnRepo.existsByIdemKey(idemKey)){
+			throw new BusinessException("There is already idem key for %s".formatted(idemKey));
+		}
+		
 		
 		var session = sessionRepo.findById(form.session_id())
                 .orElseThrow(() -> new BusinessException("There is no session"));
@@ -80,6 +90,15 @@ public class MachineService {
 		
 		wallet.setBalance(wallet.getBalance() + add);
 		walletRepo.save(wallet);
+		
+		var ledger = new PointLedger();
+		ledger.setUser(wallet.getAccount());
+		ledger.setType(LedgerType.EARN);
+		ledger.setAmount(add);
+		ledger.setBalanceAfter(wallet.getBalance().longValue());
+		ledger.setCreateAt(LocalDateTime.now());
+		ledger.setDepositTxn(txn);
+		ledgerRepo.save(ledger);
 		
 		return DepositResult.success(add, wallet.getBalance().longValue());
 	}

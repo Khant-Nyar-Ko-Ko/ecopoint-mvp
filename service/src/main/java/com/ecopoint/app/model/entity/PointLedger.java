@@ -31,10 +31,10 @@ public class PointLedger {
 	private LedgerType type;
 	
 	@Column(nullable = false)
-	private Long amount;
+	private long amount;
 	
 	@Column(nullable = false)
-	private Long balanceAfter;
+	private long balanceAfter;
 	
 	
 	@Column(nullable = false)

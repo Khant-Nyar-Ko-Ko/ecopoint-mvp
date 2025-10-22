@@ -26,4 +26,7 @@ public interface DepositTxnzRepo extends JpaRepository<DepositTxn, Long>{
 	    """)
 	    long sumPointsAddedAllTime(Long userId);
 
+
+	boolean existsByIdemKey(String idemKey);
+
 }

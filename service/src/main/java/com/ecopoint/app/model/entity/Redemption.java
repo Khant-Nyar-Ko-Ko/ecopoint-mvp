@@ -34,5 +34,7 @@ public class Redemption {
 	
 	@ManyToOne(optional = false)
 	private Account user;
+	
+	private String partner;
 
 }
