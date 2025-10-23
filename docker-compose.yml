@@ -15,19 +15,19 @@ services:
     networks:
       - postnet
 
-  # backend:
-  #   build:
-  #     context: ./service
-  #     dockerfile: Dockerfile
-  #   container_name: eco-point
-  #   environment:
-  #     - SPRING_PROFILES_ACTIVE=docker
-  #   env_file:
-  #     - .env.postgress
-  #   ports:
-  #     - 8080:8080
-  #   networks:
-  #     - postnet
+  backend:
+    build:
+      context: ./service
+      dockerfile: Dockerfile
+    container_name: eco-point
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    env_file:
+      - .env.postgress
+    ports:
+      - 8080:8080
+    networks:
+      - postnet
 
 
 volumes:
