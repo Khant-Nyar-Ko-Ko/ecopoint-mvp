@@ -26,7 +26,7 @@ public class MachineSession {
 	
 	@Enumerated(EnumType.STRING) 
 	@Column(nullable=false)
-	private Status status = Status.ACTIVE;
+	private Status status;
 	
 	@Column(nullable=false)  
 	private LocalDateTime expiresAt;

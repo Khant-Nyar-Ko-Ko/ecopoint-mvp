@@ -6,14 +6,17 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ecopoint.app.controller.input.CloseSessionReq;
 import com.ecopoint.app.controller.input.StartSessionReq;
 import com.ecopoint.app.controller.output.CloseSessionRes;
+import com.ecopoint.app.controller.output.SessionIdResult;
 import com.ecopoint.app.controller.output.StartSessionRes;
 import com.ecopoint.app.exception.BusinessException;
 import com.ecopoint.app.model.entity.MachineSession;
@@ -62,5 +65,14 @@ public class SessionApi {
 	    }
 	    return ResponseEntity.ok(new CloseSessionRes("closed"));
 	  }
+	  
+	 @GetMapping("/get-session")
+	 public ResponseEntity<SessionIdResult> getActiveSessionIdForMachine(@RequestParam String machineCode) {
+		 
+		 var session = sessionRepo.findFirstByMachineCodeAndStatus(machineCode, MachineSession.Status.ACTIVE)
+				 .orElseThrow(() -> new BusinessException("There is no current active session for this machine code : %s".formatted(machineCode)));
+		 
+		 return ResponseEntity.ok(new SessionIdResult(session.getId()));
+	 }
 
 }
