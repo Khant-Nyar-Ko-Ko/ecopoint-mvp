@@ -33,6 +33,12 @@ public class SessionApi {
 	@Transactional
 	public ResponseEntity<StartSessionRes> start(@RequestBody StartSessionReq req) {
 		
+		sessionRepo.findFirstByUserIdAndMachineCodeAndStatus(
+				req.user_id(), req.machine_code(), MachineSession.Status.ACTIVE)
+		.ifPresent(ms -> {
+			throw new BusinessException("User already has an ACTIVE session on this machine.");
+		});
+		
 	    var s = new MachineSession();
 	    s.setId(UUID.randomUUID().toString());
 	    s.setUserId(req.user_id());          
@@ -57,6 +63,10 @@ public class SessionApi {
 	  public ResponseEntity<CloseSessionRes> close(@RequestBody CloseSessionReq req) {
 		  
 	    var s = sessionRepo.findById(req.session_id()).orElseThrow(() -> new BusinessException("There is no session"));
+	    
+	    if(s.getStatus() == MachineSession.Status.CLOSED) {
+	    	throw new BusinessException("you already closed this session");
+	    }
 	    
 	    if (s.getStatus() == MachineSession.Status.ACTIVE) {
 	      s.setStatus(MachineSession.Status.CLOSED);
