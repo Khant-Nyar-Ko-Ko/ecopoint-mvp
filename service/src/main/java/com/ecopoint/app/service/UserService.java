@@ -64,7 +64,7 @@ public class UserService {
 		
 		var wallet = new PointsWallet();
 		wallet.setAccount(user);
-		wallet.setBalance(0);
+		wallet.setBalance(1000);
 		
 		pointsWalletRepo.save(wallet);
 		
