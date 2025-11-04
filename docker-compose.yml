@@ -14,14 +14,6 @@ services:
       - dbdata:/var/lib/postgresql/data
     networks:
       - postnet
-  
-  broker:
-    image: eclipse-mosquitto:2
-    container_name: mqtt-broker
-    ports:
-      - "1883:1883"
-    networks:
-      - postnet
 
   backend:
     build:
