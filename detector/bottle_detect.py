@@ -30,6 +30,7 @@ API_BASE = (os.getenv("API_URL") or os.getenv("ENDPOINT") or "http://127.0.0.1:8
 DEPOSIT_URL = f"{API_BASE}/machine"
 SESSION_START_URL = f"{API_BASE}/session/start"
 SESSION_CLOSE_URL = f"{API_BASE}/session/close"
+SESSION_FETCH_URL = f"{API_BASE}/session/get-session"
 CAM_INDEX = int(os.getenv("CAM_INDEX", "0"))
 MACHINE_CODE = os.getenv("MACHINE_CODE", "laptop_cam_01")
 BOTTLE_KIND = os.getenv("BOTTLE_TYPE", "Bottle")
@@ -38,6 +39,7 @@ MIN_PRESENT_SEC = float(os.getenv("MIN_PRESENT_SEC", "0.60"))
 DEBOUNCE_SEC = float(os.getenv("DEBOUNCE_SEC", "0.80"))       
 INACTIVITY_SEC = float(os.getenv("INACTIVITY_SEC", "90"))      
 MIN_ABSENCE_SEC = float(os.getenv("MIN_ABSENCE_SEC", "0.50"))  
+SESSION_POLL_SEC = float(os.getenv("SESSION_POLL_SEC", "2.0"))
 ROI_STR = os.getenv("ROI", "")  # e.g., "200,100,900,700"
 
 def parse_roi(roi_str: str, frame_shape) -> Optional[tuple]:
@@ -174,6 +176,7 @@ class SessionManager:
         self._default_machine = default_machine
         self.state = SessionState()
         self._offline_mode = False
+        self._last_sync_ts = 0.0
 
     def open_session(self, machine_code: Optional[str] = None) -> None:
         if self.state.is_active():
@@ -222,6 +225,51 @@ class SessionManager:
                 "idem_key": self.state.idem_key,
             },
         )
+
+    def sync_remote_session(self) -> None:
+        now = time.time()
+        if now - self._last_sync_ts < SESSION_POLL_SEC:
+            return
+        self._last_sync_ts = now
+
+        if self.state.is_active():
+            return
+
+        try:
+            response = requests.get(
+                SESSION_FETCH_URL,
+                params={"machineCode": self._default_machine},
+                timeout=5,
+            )
+            response.raise_for_status()
+        except HTTPError as exc:
+            status = exc.response.status_code if exc.response else None
+            if status == 404:
+                return
+            msg = _extract_error_message(exc.response)
+            print(f"Session poll failed ({status}): {msg or exc}")
+            return
+        except RequestException as exc:
+            print("Session poll failed:", exc)
+            return
+        except Exception as exc:
+            print("Unexpected error during session poll:", exc)
+            return
+
+        data = response.json() if response is not None else None
+        if not isinstance(data, dict):
+            return
+        session_id = data.get("session_id")
+        if not session_id:
+            return
+
+        self.state.session_id = session_id
+        self.state.machine_code = self._default_machine
+        self.state.idem_key = uuid.uuid4().hex
+        self.state.bottle_count = 0
+        self.state.expires_at = None
+        self._offline_mode = False
+        print("Attached to remote session:", session_id)
 
     def register_detection(self) -> None:
         if not self.state.is_active():
@@ -351,6 +399,10 @@ def run_detection_loop():
             # Lazy-parse ROI after we know frame shape
             if roi is None:
                 roi = parse_roi(ROI_STR, frame.shape)
+
+            # Attempt to attach to a remotely-started session when idle
+            if not session_manager.state.is_active():
+                session_manager.sync_remote_session()
 
             # Key handling
             key = cv2.waitKey(1) & 0xFF
