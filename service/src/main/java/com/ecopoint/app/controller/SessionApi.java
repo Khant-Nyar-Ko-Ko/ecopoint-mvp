@@ -21,6 +21,7 @@ import com.ecopoint.app.controller.output.StartSessionRes;
 import com.ecopoint.app.exception.BusinessException;
 import com.ecopoint.app.model.entity.MachineSession;
 import com.ecopoint.app.model.repo.MachineSessionRepo;
+import com.ecopoint.app.mqtt.DeviceCommandPublisher;
 
 @RestController
 @RequestMapping("/api/session")
@@ -28,6 +29,8 @@ public class SessionApi {
 	
 	@Autowired
 	private MachineSessionRepo sessionRepo;
+	@Autowired
+	private DeviceCommandPublisher devicePublisher;
 	
 	@PostMapping("/start")
 	@Transactional
@@ -49,6 +52,8 @@ public class SessionApi {
 	    
 	    sessionRepo.save(s);
 	    
+	    devicePublisher.startSession(s.getMachineCode(), s.getId(), s.getUserId());
+	    
 	    return ResponseEntity.ok(
 	    		new StartSessionRes(
 	    				s.getId(), 
@@ -69,6 +74,9 @@ public class SessionApi {
 	    }
 	    
 	    if (s.getStatus() == MachineSession.Status.ACTIVE) {
+	    	
+	      devicePublisher.endSession(s.getMachineCode());
+	    	
 	      s.setStatus(MachineSession.Status.CLOSED);
 	      s.setClosedAt(LocalDateTime.now());
 	      sessionRepo.save(s);
