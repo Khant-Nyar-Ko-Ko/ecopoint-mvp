@@ -37,6 +37,7 @@ YOLO_CONF = float(os.getenv("YOLO_CONF", "0.70"))
 MIN_PRESENT_SEC = float(os.getenv("MIN_PRESENT_SEC", "0.60"))  
 DEBOUNCE_SEC = float(os.getenv("DEBOUNCE_SEC", "0.80"))       
 INACTIVITY_SEC = float(os.getenv("INACTIVITY_SEC", "90"))      
+MIN_ABSENCE_SEC = float(os.getenv("MIN_ABSENCE_SEC", "0.50"))  
 ROI_STR = os.getenv("ROI", "")  # e.g., "200,100,900,700"
 
 def parse_roi(roi_str: str, frame_shape) -> Optional[tuple]:
@@ -336,6 +337,7 @@ def run_detection_loop():
     present_since = 0.0             # when we first saw it
     last_count_ts = 0.0             # last time we incremented
     last_activity_ts = time.time()  # for inactivity auto-finish
+    last_seen_ts = 0.0              # last frame YOLO saw a bottle
     roi = None                      # will be filled after first frame if ROI is set
 
     print("Press 's' to START, 'f' to FINISH, 'q' to quit.")
@@ -368,6 +370,7 @@ def run_detection_loop():
                 # reset detection state when no active session
                 bottle_present = False
                 present_since = 0.0
+                last_seen_ts = 0.0
 
             # Apply ROI (optional), then run YOLO for preview/detections
             view = crop_to_roi(frame, roi)
@@ -377,6 +380,8 @@ def run_detection_loop():
 
             # --- YOLO-only edge logic ---
             if active_session:
+                if sees_bottle:
+                    last_seen_ts = now
                 if sees_bottle and not bottle_present:
                     # Bottle just appeared
                     bottle_present = True
@@ -384,17 +389,30 @@ def run_detection_loop():
                     last_activity_ts = now
 
                 elif not sees_bottle and bottle_present:
-                    # Bottle just disappeared; check if it was present long enough & debounce
-                    visible_for = now - present_since
+                    # Wait for a minimum absence duration to avoid double counts from flicker
+                    if last_seen_ts == 0.0:
+                        last_seen_ts = present_since
+                    absence_for = now - last_seen_ts
+                    if absence_for < MIN_ABSENCE_SEC:
+                        continue
+
+                    visible_for = last_seen_ts - present_since
                     since_last = now - last_count_ts
                     if visible_for >= MIN_PRESENT_SEC and since_last >= DEBOUNCE_SEC:
                         session_manager.register_detection()
                         last_count_ts = now
-                        print(f"[ACCEPT] count = {session_manager.state.bottle_count} (visible {visible_for:.2f}s)")
+                        print(
+                            f"[ACCEPT] count = {session_manager.state.bottle_count} "
+                            f"(visible {visible_for:.2f}s, absence {absence_for:.2f}s)"
+                        )
                     else:
-                        print(f"[REJECT] visible {visible_for:.2f}s, since_last {since_last:.2f}s")
+                        print(
+                            f"[REJECT] visible {visible_for:.2f}s, since_last {since_last:.2f}s, "
+                            f"absence {absence_for:.2f}s"
+                        )
                     bottle_present = False
                     present_since = 0.0
+                    last_seen_ts = 0.0
                     last_activity_ts = now
 
                 # Auto-finish if user forgets
