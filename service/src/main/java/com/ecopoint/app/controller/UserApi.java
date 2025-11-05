@@ -60,4 +60,9 @@ public class UserApi {
 		return ResponseEntity.ok(userService.redeemedPoint(id, form));
 	}
 	
+	@GetMapping("/get-points/{id}/{sessionId}/{machineid}")
+	public ResponseEntity<String> getPoints(@PathVariable Long id, @PathVariable String sessionId, @PathVariable String machineid) {
+		return ResponseEntity.ok(userService.getPoint(id, sessionId, machineid));
+	}
+	
 }
