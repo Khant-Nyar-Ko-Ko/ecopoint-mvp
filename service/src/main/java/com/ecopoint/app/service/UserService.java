@@ -15,6 +15,7 @@ import com.ecopoint.app.controller.input.RedeemForm;
 import com.ecopoint.app.controller.input.SignUpForm;
 import com.ecopoint.app.controller.output.ActivityItem;
 import com.ecopoint.app.controller.output.ModificationResult;
+import com.ecopoint.app.controller.output.PointsLedger;
 import com.ecopoint.app.controller.output.UserDetails;
 import com.ecopoint.app.controller.output.WalletDetails;
 import com.ecopoint.app.exception.BusinessException;
@@ -173,7 +174,7 @@ public class UserService {
 	}
 
 	@Transactional(readOnly = true)
-	public String getPoint(Long id, String sessionId, String machineId) {
+	public PointsLedger getPoint(Long id, String sessionId, String machineId) {
 		
 		var account = accountRepo.findById(id)
 				.orElseThrow(() -> new BusinessException("There is no account with this user id : %s".formatted(id)));
@@ -206,7 +207,7 @@ public class UserService {
 	    
 	    var txn = txns.get(0);
 		
-		return "points : %d".formatted(txn.getPointsAdded());
+		return new PointsLedger(txn.getPointsAdded(), txn.getQuantity());
 	}
 	
 	

@@ -17,6 +17,7 @@ import com.ecopoint.app.controller.input.RedeemForm;
 import com.ecopoint.app.controller.input.SignUpForm;
 import com.ecopoint.app.controller.output.ActivityItem;
 import com.ecopoint.app.controller.output.ModificationResult;
+import com.ecopoint.app.controller.output.PointsLedger;
 import com.ecopoint.app.controller.output.UserDetails;
 import com.ecopoint.app.controller.output.WalletDetails;
 import com.ecopoint.app.service.UserService;
@@ -61,7 +62,7 @@ public class UserApi {
 	}
 	
 	@GetMapping("/get-points/{id}/{sessionId}/{machineid}")
-	public ResponseEntity<String> getPoints(@PathVariable Long id, @PathVariable String sessionId, @PathVariable String machineid) {
+	public ResponseEntity<PointsLedger> getPoints(@PathVariable Long id, @PathVariable String sessionId, @PathVariable String machineid) {
 		return ResponseEntity.ok(userService.getPoint(id, sessionId, machineid));
 	}
 	
