@@ -22,7 +22,6 @@ import com.ecopoint.app.model.LedgerType;
 import com.ecopoint.app.model.RedeemStatus;
 import com.ecopoint.app.model.Role;
 import com.ecopoint.app.model.entity.Account;
-import com.ecopoint.app.model.entity.MachineSession.Status;
 import com.ecopoint.app.model.entity.PointLedger;
 import com.ecopoint.app.model.entity.PointsWallet;
 import com.ecopoint.app.model.entity.Redemption;
@@ -184,9 +183,6 @@ public class UserService {
 				.orElseThrow(() -> new BusinessException("There is no session with this session id : %s".formatted(sessionId)));
 		
 		
-		if(session.getStatus() != Status.ACTIVE) {
-			throw new BusinessException("Session is not active session");
-		}
 		
 		if (!session.getUserId().equals(id)) {
 	        throw new BusinessException("Session does not belong to this user");
