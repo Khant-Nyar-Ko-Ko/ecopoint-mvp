@@ -26,7 +26,7 @@ def load_env_file(path: Path) -> None:
 load_env_file(Path(__file__).resolve().parent.parent / ".env")
 
 USER_ID = os.getenv("USER_ID", "demo_user")
-API_BASE = (os.getenv("API_URL") or os.getenv("ENDPOINT") or "http://127.0.0.1:8080/api").rstrip("/")
+API_BASE = (os.getenv("API_URL") or os.getenv("ENDPOINT") or "http://127.0.0.1:8000/api").rstrip("/")
 DEPOSIT_URL = f"{API_BASE}/machine"
 SESSION_START_URL = f"{API_BASE}/session/start"
 SESSION_CLOSE_URL = f"{API_BASE}/session/close"
