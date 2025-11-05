@@ -22,11 +22,13 @@ import com.ecopoint.app.model.LedgerType;
 import com.ecopoint.app.model.RedeemStatus;
 import com.ecopoint.app.model.Role;
 import com.ecopoint.app.model.entity.Account;
+import com.ecopoint.app.model.entity.MachineSession.Status;
 import com.ecopoint.app.model.entity.PointLedger;
 import com.ecopoint.app.model.entity.PointsWallet;
 import com.ecopoint.app.model.entity.Redemption;
 import com.ecopoint.app.model.repo.AccountRepo;
 import com.ecopoint.app.model.repo.DepositTxnzRepo;
+import com.ecopoint.app.model.repo.MachineSessionRepo;
 import com.ecopoint.app.model.repo.PointLedgerRepo;
 import com.ecopoint.app.model.repo.PointsWalletRepo;
 import com.ecopoint.app.model.repo.RedemptionRepo;
@@ -44,7 +46,9 @@ public class UserService {
 	private RedemptionRepo redemptionRepo;
 	@Autowired
 	private PointLedgerRepo ledgerRepo;
-
+	@Autowired
+	private MachineSessionRepo sessionRepo;
+	
 	
 	@Transactional
 	public ModificationResult<Long> create(SignUpForm form) {
@@ -167,6 +171,46 @@ public class UserService {
 		ledgerRepo.save(ledger);
 		
 		return new ModificationResult<Long>(id, "success");
+	}
+
+	@Transactional(readOnly = true)
+	public String getPoint(Long id, String sessionId, String machineId) {
+		
+		var account = accountRepo.findById(id)
+				.orElseThrow(() -> new BusinessException("There is no account with this user id : %s".formatted(id)));
+		
+		
+		var session = sessionRepo.findById(sessionId)
+				.orElseThrow(() -> new BusinessException("There is no session with this session id : %s".formatted(sessionId)));
+		
+		
+		if(session.getStatus() != Status.ACTIVE) {
+			throw new BusinessException("Session is not active session");
+		}
+		
+		if (!session.getUserId().equals(id)) {
+	        throw new BusinessException("Session does not belong to this user");
+	    }
+		
+		if (!session.getMachineCode().equals(machineId)) {
+	        throw new BusinessException("Session machine does not match");
+	    }
+		
+		LocalDateTime start = session.getCreatedAt();
+	    LocalDateTime end = (session.getClosedAt() != null) ? session.getClosedAt() : session.getExpiresAt();
+
+	    var txns = depositTxnzRepo.findByUser_IdAndMachineIdAndCreateAtBetween(id, machineId, start, end);
+
+	    if (txns.isEmpty()) {
+	        throw new BusinessException("No deposit transaction found for this user/machine in this session");
+	    }
+	    if (txns.size() > 1) {
+	        throw new BusinessException("Multiple deposit transactions found for this session; expected exactly one");
+	    }
+	    
+	    var txn = txns.get(0);
+		
+		return "points : %d".formatted(txn.getPointsAdded());
 	}
 	
 	
