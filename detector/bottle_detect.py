@@ -37,7 +37,7 @@ BOTTLE_KIND = os.getenv("BOTTLE_TYPE", "Bottle")
 YOLO_CONF = float(os.getenv("YOLO_CONF", "0.70"))    
 MIN_PRESENT_SEC = float(os.getenv("MIN_PRESENT_SEC", "0.60"))  
 DEBOUNCE_SEC = float(os.getenv("DEBOUNCE_SEC", "0.80"))       
-INACTIVITY_SEC = float(os.getenv("INACTIVITY_SEC", "90"))      
+INACTIVITY_SEC = float(os.getenv("INACTIVITY_SEC", "20"))      
 MIN_ABSENCE_SEC = float(os.getenv("MIN_ABSENCE_SEC", "0.50"))  
 SESSION_POLL_SEC = float(os.getenv("SESSION_POLL_SEC", "2.0"))
 ROI_STR = os.getenv("ROI", "")  # e.g., "200,100,900,700"
@@ -177,9 +177,10 @@ class SessionManager:
         self.state = SessionState()
         self._offline_mode = False
         self._last_sync_ts = 0.0
+        self._awaiting_remote_close = False
 
     def open_session(self, machine_code: Optional[str] = None) -> None:
-        if self.state.is_active():
+        if self.is_active():
             print("Session already active, ignoring open request.")
             return
 
@@ -194,7 +195,7 @@ class SessionManager:
             status = exc.response.status_code if exc.response else None
             msg = _extract_error_message(exc.response)
             print(f"Session start rejected ({status}): {msg or exc}")
-            if self.state.is_active():
+            if self.is_active():
                 print("Keeping existing session active locally.")
                 return
             if status and status >= 500:
@@ -217,6 +218,7 @@ class SessionManager:
         self.state.bottle_count = 0
         self.state.expires_at = _parse_expires_at(expires)
         self._offline_mode = False
+        self._awaiting_remote_close = False
         print(
             "Session ready:",
             {
@@ -226,14 +228,14 @@ class SessionManager:
             },
         )
 
+    def is_active(self) -> bool:
+        return self.state.is_active() and not self._awaiting_remote_close
+
     def sync_remote_session(self) -> None:
         now = time.time()
         if now - self._last_sync_ts < SESSION_POLL_SEC:
             return
         self._last_sync_ts = now
-
-        if self.state.is_active():
-            return
 
         try:
             response = requests.get(
@@ -245,6 +247,11 @@ class SessionManager:
         except HTTPError as exc:
             status = exc.response.status_code if exc.response else None
             if status == 404:
+                if self.state.session_id or self._awaiting_remote_close:
+                    print("No active session reported by backend; clearing local state.")
+                self.state.reset()
+                self._offline_mode = False
+                self._awaiting_remote_close = False
                 return
             msg = _extract_error_message(exc.response)
             print(f"Session poll failed ({status}): {msg or exc}")
@@ -262,17 +269,32 @@ class SessionManager:
         session_id = data.get("session_id")
         if not session_id:
             return
+        if self._awaiting_remote_close:
+            if self.state.session_id == session_id:
+                # Still waiting for backend to close the current session
+                return
+            print("Detected new session while awaiting remote close; clearing previous state.")
+            self.state.reset()
+            self._awaiting_remote_close = False
 
+        if self.state.session_id == session_id and self.state.is_active():
+            # Already tracking this active session; nothing to do.
+            return
+
+        print("Attached to remote session:", session_id)
         self.state.session_id = session_id
         self.state.machine_code = self._default_machine
         self.state.idem_key = uuid.uuid4().hex
         self.state.bottle_count = 0
         self.state.expires_at = None
         self._offline_mode = False
-        print("Attached to remote session:", session_id)
+        self._awaiting_remote_close = False
 
     def register_detection(self) -> None:
-        if not self.state.is_active():
+        if self._awaiting_remote_close:
+            print("Ignoring detection; waiting for backend to close the session.")
+            return
+        if not self.is_active():
             print("Detection captured in offline preview mode (not counted).")
             return
         self.state.bottle_count += 1
@@ -292,28 +314,33 @@ class SessionManager:
             )
             self.state.reset()
             self._offline_mode = False
+            self._awaiting_remote_close = False
             print("Session state cleared.")
+            return
+        if self._awaiting_remote_close:
+            print("Deposit already submitted; waiting for backend to close the session.")
             return
         sid = self.state.session_id
         machine_code = self.state.machine_code or self._default_machine
         bottle_count = self.state.bottle_count
         idem_key = self.state.idem_key
-        try:
-            self._submit_deposit(
-                session_id=sid,
-                machine_code=machine_code,
-                bottle_count=bottle_count,
-                idem_key=idem_key,
-            )
-        finally:
-            self._close_remote_session(sid)
-            self.state.reset()
-            print("Session state cleared.")
+        success = self._submit_deposit(
+            session_id=sid,
+            machine_code=machine_code,
+            bottle_count=bottle_count,
+            idem_key=idem_key,
+        )
+        if not success:
+            print("Deposit submission failed; session remains active.")
+            return
+
+        self._awaiting_remote_close = True
+        print("Deposit submitted. Waiting for backend to close the session.")
 
     def _submit_deposit(self, *, session_id: Optional[str], machine_code: str, bottle_count: int, idem_key: Optional[str]) -> None:
         if bottle_count <= 0:
             print("No bottles detected, skipping deposit request.")
-            return
+            return True
 
         payload = {
             "session_id": session_id,
@@ -327,8 +354,10 @@ class SessionManager:
             response = _post_with_retry(DEPOSIT_URL, json=payload, headers=headers, timeout=5)
             response.raise_for_status()
             print("Deposit API response:", response.json())
+            return True
         except Exception as exc:
             print("Deposit request failed:", exc)
+            return False
 
     def _close_remote_session(self, session_id: Optional[str]) -> None:
         payload = {"session_id": session_id}
@@ -347,9 +376,13 @@ class SessionManager:
         self.state.expires_at = None
         self.state.idem_key = None
         self.state.bottle_count = 0
+        self._awaiting_remote_close = False
         print(
             "Offline mode enabled. Detections will be tracked locally until the backend is reachable."
         )
+
+    def waiting_for_remote_close(self) -> bool:
+        return self._awaiting_remote_close
 
 
 def create_session_manager() -> SessionManager:
@@ -400,9 +433,25 @@ def run_detection_loop():
             if roi is None:
                 roi = parse_roi(ROI_STR, frame.shape)
 
-            # Attempt to attach to a remotely-started session when idle
-            if not session_manager.state.is_active():
-                session_manager.sync_remote_session()
+            prev_active = session_manager.is_active()
+            prev_session = session_manager.state.session_id
+            session_manager.sync_remote_session()
+            curr_active = session_manager.is_active()
+            curr_session = session_manager.state.session_id
+            if prev_active and not curr_active:
+                bottle_present = False
+                present_since = 0.0
+                last_seen_ts = 0.0
+            if not prev_active and curr_active:
+                bottle_present = False
+                present_since = 0.0
+                last_seen_ts = 0.0
+                last_activity_ts = time.time()
+            if prev_session and curr_session and prev_session != curr_session:
+                bottle_present = False
+                present_since = 0.0
+                last_seen_ts = 0.0
+                last_activity_ts = time.time()
 
             # Key handling
             key = cv2.waitKey(1) & 0xFF
@@ -415,9 +464,11 @@ def run_detection_loop():
                 session_manager.finalize_session()
                 bottle_present = False
                 present_since = 0.0
+                last_seen_ts = 0.0
                 last_activity_ts = time.time()
 
-            active_session = session_manager.state.is_active()
+            active_session = session_manager.is_active()
+            waiting_close = session_manager.waiting_for_remote_close()
             if not active_session:
                 # reset detection state when no active session
                 bottle_present = False
@@ -475,6 +526,7 @@ def run_detection_loop():
                     session_manager.finalize_session()
                     bottle_present = False
                     present_since = 0.0
+                    last_seen_ts = 0.0
                     last_activity_ts = now
             else:
                 # When not active, keep debounce state idle but surface live detections
@@ -486,8 +538,19 @@ def run_detection_loop():
             if roi:
                 x1, y1, x2, y2 = roi
                 cv2.rectangle(display, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            overlay_status(display, session_manager.state.bottle_count, secs_left if session_manager.state.is_active() else None)
-            if not active_session:
+            overlay_status(display, session_manager.state.bottle_count, secs_left if session_manager.is_active() else None)
+            if waiting_close:
+                cv2.putText(
+                    display,
+                    "Deposit sent. Waiting for backend to close session...",
+                    (16, 64),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 255, 0),
+                    2,
+                    cv2.LINE_AA,
+                )
+            elif not active_session:
                 cv2.putText(
                     display,
                     "Press 's' to start session (offline fallback supported)",
